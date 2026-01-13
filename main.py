@@ -55,6 +55,11 @@ async def harvest_status(hive_id: int):
     conn.close()
     return "true" if result and result[0] else "false"
 
+# Health check for Render (responds fast to root /)
+@app.get("/")
+async def root():
+    return {"status": "healthy", "message": "Smart Nyuki API is running"}
+
 # Streamlit Dashboard - at root /
 st.set_page_config(page_title="SMART NYUKI", layout="wide")
 st.title("🐝 SMART NYUKI - Live Dashboard")

@@ -1,11 +1,14 @@
-﻿from fastapi import FastAPI
-from pydantic import BaseModel
-import sqlite3
-from datetime import datetime
+﻿# main.py - Streamlit Dashboard + API endpoints in one file (Render compatible)
+
 import streamlit as st
 import pandas as pd
+import sqlite3
+from datetime import datetime
 import os
+from fastapi import FastAPI
+from pydantic import BaseModel
 import uvicorn
+from threading import Thread
 
 app = FastAPI()
 
@@ -55,46 +58,46 @@ async def harvest_status(hive_id: int):
     conn.close()
     return "true" if result and result[0] else "false"
 
-# Streamlit Dashboard (served at /ui)
-def run_dashboard():
-    st.set_page_config(page_title="SMART NYUKI", layout="wide")
-    st.title("🐝 SMART NYUKI - Live Dashboard")
+# Run FastAPI in background thread
+def run_api():
+    uvicorn.run("main:app", host="0.0.0.0", port=8000, log_level="info")
 
-    conn = sqlite3.connect(DB_PATH)
-    df = pd.read_sql_query("SELECT * FROM hives", conn)
-    conn.close()
+# Start API thread
+api_thread = Thread(target=run_api, daemon=True)
+api_thread.start()
 
-    if df.empty:
-        st.info("Waiting for data from hives...")
-    else:
-        for _, row in df.iterrows():
-            hive_id = row['hive_id']
-            weight = row['weight_kg']
-            level = row['level']
-            extracting = row['extracting']
+# Streamlit Dashboard (runs at root /)
+st.set_page_config(page_title="SMART NYUKI", layout="wide")
+st.title("🐝 SMART NYUKI - Live Dashboard")
 
-            with st.container(border=True):
-                st.subheader(f"Hive {hive_id}")
-                col1, col2 = st.columns([3, 1])
-                with col1:
-                    st.metric("Weight", f"{weight:.2f} kg")
-                    st.progress(level / 100)
-                    st.caption(f"{level}% full")
-                with col2:
-                    if level >= 50:
-                        if st.button("HARVEST HONEY", key=f"btn_{hive_id}", type="primary"):
-                            st.session_state[f"harvest_{hive_id}"] = True
-                            st.success("Harvest command sent!")
-                    else:
-                        st.button("Not Ready", disabled=True)
+conn = sqlite3.connect(DB_PATH)
+df = pd.read_sql_query("SELECT * FROM hives", conn)
+conn.close()
 
-if __name__ == "__main__":
-    import sys
-    if len(sys.argv) > 1 and sys.argv[1] == "--dashboard":
-        # Run Streamlit at /ui
-        sys.argv = ["streamlit", "run", __file__, "--server.port", os.environ.get("PORT", "8501"), "--server.address", "0.0.0.0"]
-        import streamlit.web.cli as stcli
-        stcli.main()
-    else:
-        # Run FastAPI API
-        uvicorn.run("main:app", host="0.0.0.0", port=int(os.environ.get("PORT", 8000)))
+if df.empty:
+    st.info("Waiting for data from hives...")
+else:
+    for _, row in df.iterrows():
+        hive_id = row['hive_id']
+        weight = row['weight_kg']
+        level = row['level']
+        extracting = row['extracting']
+
+        with st.container(border=True):
+            st.subheader(f"Hive {hive_id}")
+            col1, col2 = st.columns([3, 1])
+            with col1:
+                st.metric("Weight", f"{weight:.2f} kg")
+                st.progress(level / 100)
+                st.caption(f"{level}% full • Last update: {row['last_update']}")
+            with col2:
+                if level >= 50:
+                    if st.button("HARVEST HONEY", key=f"btn_{hive_id}", type="primary"):
+                        st.session_state[f"harvest_{hive_id}"] = True
+                        st.success("Harvest command sent!")
+                else:
+                    st.button("Not Ready", disabled=True)
+
+# Auto-refresh every 10 seconds
+time.sleep(10)
+st.rerun()

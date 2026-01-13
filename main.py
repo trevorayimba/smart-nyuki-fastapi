@@ -1,13 +1,9 @@
 ﻿import time
 import os
-from fastapi import FastAPI
-from pydantic import BaseModel
 import sqlite3
 from datetime import datetime
 import streamlit as st
 import pandas as pd
-
-app = FastAPI()
 
 DB_PATH = "data/hives.db"
 os.makedirs("data", exist_ok=True)
@@ -26,41 +22,7 @@ def init_db():
 
 init_db()
 
-class HiveData(BaseModel):
-    hive: int
-    weight_kg: float
-    extracting: bool = False
-
-@app.post("/beehive")
-async def receive_data(data: HiveData):
-    conn = sqlite3.connect(DB_PATH)
-    c = conn.cursor()
-    now = datetime.now().isoformat()
-    level = round((data.weight_kg / 12) * 100)
-    level = max(0, min(100, level))
-    c.execute('''INSERT OR REPLACE INTO hives 
-                 (hive_id, weight_kg, level, extracting, last_update)
-                 VALUES (?, ?, ?, ?, ?)''',
-              (data.hive, data.weight_kg, level, data.extracting, now))
-    conn.commit()
-    conn.close()
-    return {"status": "success"}
-
-@app.get("/beehive/{hive_id}/harvest-status")
-async def harvest_status(hive_id: int):
-    conn = sqlite3.connect(DB_PATH)
-    c = conn.cursor()
-    c.execute("SELECT extracting FROM hives WHERE hive_id = ?", (hive_id,))
-    result = c.fetchone()
-    conn.close()
-    return "true" if result and result[0] else "false"
-
-# Health check for Render (responds fast to root /)
-@app.get("/")
-async def root():
-    return {"status": "healthy", "message": "Smart Nyuki API is running"}
-
-# Streamlit Dashboard - at root /
+# Streamlit Dashboard at root /
 st.set_page_config(page_title="SMART NYUKI", layout="wide")
 st.title("🐝 SMART NYUKI - Live Dashboard")
 
@@ -83,15 +45,20 @@ else:
             with col1:
                 st.metric("Weight", f"{weight:.2f} kg")
                 st.progress(level / 100)
-                st.caption(f"{level}% full")
+                st.caption(f"{level}% full • Last update: {row['last_update']}")
             with col2:
                 if level >= 50:
                     if st.button("HARVEST HONEY", key=f"btn_{hive_id}", type="primary"):
-                        st.session_state[f"harvest_{hive_id}"] = True
-                        st.success("Harvest command sent!")
+                        # Simulate harvest command (set extracting = True)
+                        conn = sqlite3.connect(DB_PATH)
+                        c = conn.cursor()
+                        c.execute("UPDATE hives SET extracting = 1 WHERE hive_id = ?", (hive_id,))
+                        conn.commit()
+                        conn.close()
+                        st.success(f"Harvest command sent to Hive {hive_id}!")
                 else:
                     st.button("Not Ready", disabled=True)
 
-# Auto-refresh
+# Auto-refresh every 10 seconds
 time.sleep(10)
 st.rerun()

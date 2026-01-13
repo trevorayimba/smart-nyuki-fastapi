@@ -1,9 +1,23 @@
 ﻿import time
 import os
+from fastapi import FastAPI
+from fastapi.middleware.cors import CORSMiddleware
+from pydantic import BaseModel
 import sqlite3
 from datetime import datetime
 import streamlit as st
 import pandas as pd
+
+app = FastAPI()
+
+# Add CORS to allow ESP32 POST/GET (fixes 403 Forbidden)
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=["*"],  # Allow all origins (for testing; restrict in production)
+    allow_credentials=True,
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
 
 DB_PATH = "data/hives.db"
 os.makedirs("data", exist_ok=True)
@@ -22,16 +36,36 @@ def init_db():
 
 init_db()
 
-# Mock data for testing (remove later)
-if 'mock_added' not in st.session_state:
+class HiveData(BaseModel):
+    hive: int
+    weight_kg: float
+    extracting: bool = False
+
+@app.post("/beehive")
+async def receive_data(data: HiveData):
     conn = sqlite3.connect(DB_PATH)
     c = conn.cursor()
-    c.execute("INSERT OR REPLACE INTO hives VALUES (1, 8.5, 71, 0, ?)", (datetime.now().isoformat(),))
+    now = datetime.now().isoformat()
+    level = round((data.weight_kg / 12) * 100)
+    level = max(0, min(100, level))
+    c.execute('''INSERT OR REPLACE INTO hives 
+                 (hive_id, weight_kg, level, extracting, last_update)
+                 VALUES (?, ?, ?, ?, ?)''',
+              (data.hive, data.weight_kg, level, data.extracting, now))
     conn.commit()
     conn.close()
-    st.session_state.mock_added = True
+    return {"status": "success"}
 
-# Dashboard
+@app.get("/beehive/{hive_id}/harvest-status")
+async def harvest_status(hive_id: int):
+    conn = sqlite3.connect(DB_PATH)
+    c = conn.cursor()
+    c.execute("SELECT extracting FROM hives WHERE hive_id = ?", (hive_id,))
+    result = c.fetchone()
+    conn.close()
+    return "true" if result and result[0] else "false"
+
+# Streamlit Dashboard at root /
 st.set_page_config(page_title="SMART NYUKI", layout="wide")
 st.title("🐝 SMART NYUKI - Live Dashboard")
 
@@ -54,7 +88,7 @@ else:
             with col1:
                 st.metric("Weight", f"{weight:.2f} kg")
                 st.progress(level / 100)
-                st.caption(f"{level}% full • Last update: {row['last_update']}")
+                st.caption(f"{level}% full")
             with col2:
                 if level >= 50:
                     if st.button("HARVEST HONEY", key=f"btn_{hive_id}", type="primary"):
@@ -64,6 +98,11 @@ else:
                         conn.commit()
                         conn.close()
                         st.success(f"Harvest command sent to Hive {hive_id}!")
+                        # Reset after 10 seconds (servo close time)
+                        time.sleep(10)
+                        c.execute("UPDATE hives SET extracting = 0 WHERE hive_id = ?", (hive_id,))
+                        conn.commit()
+                        conn.close()
                 else:
                     st.button("Not Ready", disabled=True)
 

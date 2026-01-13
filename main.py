@@ -5,6 +5,7 @@ from datetime import datetime
 import streamlit as st
 import pandas as pd
 import os
+import uvicorn
 
 app = FastAPI()
 
@@ -89,7 +90,8 @@ def run_dashboard():
 if __name__ == "__main__":
     import sys
     if len(sys.argv) > 1 and sys.argv[1] == "--dashboard":
-        run_dashboard()
+        sys.argv = ["streamlit", "run", __file__, "--server.port", os.environ.get("PORT", "8501"), "--server.address", "0.0.0.0"]
+        import streamlit.web.cli as stcli
+        stcli.main()
     else:
-        import uvicorn
-        uvicorn.run(app, host="0.0.0.0", port=int(os.environ.get("PORT", 8000)))
+        uvicorn.run("main:app", host="0.0.0.0", port=int(os.environ.get("PORT", 8000)))

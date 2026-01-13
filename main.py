@@ -1,11 +1,11 @@
 ﻿import time
+import os
 from fastapi import FastAPI
 from pydantic import BaseModel
 import sqlite3
 from datetime import datetime
 import streamlit as st
 import pandas as pd
-import os
 
 app = FastAPI()
 
@@ -31,7 +31,6 @@ class HiveData(BaseModel):
     weight_kg: float
     extracting: bool = False
 
-# API Endpoints (FastAPI)
 @app.post("/beehive")
 async def receive_data(data: HiveData):
     conn = sqlite3.connect(DB_PATH)
@@ -56,7 +55,7 @@ async def harvest_status(hive_id: int):
     conn.close()
     return "true" if result and result[0] else "false"
 
-# Streamlit Dashboard - Runs at root /
+# Streamlit Dashboard - at root /
 st.set_page_config(page_title="SMART NYUKI", layout="wide")
 st.title("🐝 SMART NYUKI - Live Dashboard")
 
@@ -88,6 +87,6 @@ else:
                 else:
                     st.button("Not Ready", disabled=True)
 
-# Auto-refresh every 10 seconds
+# Auto-refresh
 time.sleep(10)
 st.rerun()

@@ -22,7 +22,16 @@ def init_db():
 
 init_db()
 
-# Streamlit Dashboard at root /
+# Mock data for testing (remove later)
+if 'mock_added' not in st.session_state:
+    conn = sqlite3.connect(DB_PATH)
+    c = conn.cursor()
+    c.execute("INSERT OR REPLACE INTO hives VALUES (1, 8.5, 71, 0, ?)", (datetime.now().isoformat(),))
+    conn.commit()
+    conn.close()
+    st.session_state.mock_added = True
+
+# Dashboard
 st.set_page_config(page_title="SMART NYUKI", layout="wide")
 st.title("🐝 SMART NYUKI - Live Dashboard")
 
@@ -49,7 +58,6 @@ else:
             with col2:
                 if level >= 50:
                     if st.button("HARVEST HONEY", key=f"btn_{hive_id}", type="primary"):
-                        # Simulate harvest command (set extracting = True)
                         conn = sqlite3.connect(DB_PATH)
                         c = conn.cursor()
                         c.execute("UPDATE hives SET extracting = 1 WHERE hive_id = ?", (hive_id,))

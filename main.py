@@ -55,6 +55,7 @@ async def harvest_status(hive_id: int):
     conn.close()
     return "true" if result and result[0] else "false"
 
+# Streamlit Dashboard (served at /ui)
 def run_dashboard():
     st.set_page_config(page_title="SMART NYUKI", layout="wide")
     st.title("🐝 SMART NYUKI - Live Dashboard")
@@ -90,8 +91,10 @@ def run_dashboard():
 if __name__ == "__main__":
     import sys
     if len(sys.argv) > 1 and sys.argv[1] == "--dashboard":
+        # Run Streamlit at /ui
         sys.argv = ["streamlit", "run", __file__, "--server.port", os.environ.get("PORT", "8501"), "--server.address", "0.0.0.0"]
         import streamlit.web.cli as stcli
         stcli.main()
     else:
+        # Run FastAPI API
         uvicorn.run("main:app", host="0.0.0.0", port=int(os.environ.get("PORT", 8000)))
